@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login — StyleCart</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+
+<nav class="navbar">
+  <a href="/" class="nav-brand">StyleCart</a>
+  <ul class="nav-links">
+    <li><a href="/">Shop</a></li>
+  </ul>
+  <div style="display:flex;align-items:center;gap:0.75rem;">
+    <div id="nav-auth" style="display:none;gap:0.5rem;" class="nav-links">
+      <a href="/login" class="active">Login</a>
+      <a href="/register" class="btn btn-primary btn-sm">Register</a>
+    </div>
+    <div id="nav-user" style="display:none;align-items:center;gap:0.75rem;" class="nav-user"></div>
+  </div>
+</nav>
+
+<div class="page-sm">
+  <div class="form-card">
+    <h1 class="form-title">Welcome back</h1>
+    <p class="form-sub">Sign in to your StyleCart account</p>
+
+    <div class="alert alert-error" id="error-msg"></div>
+
+    <div class="form-group">
+      <label>Email Address</label>
+      <input type="email" id="email" placeholder="you@example.com" autocomplete="email" />
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="password" placeholder="••••••••" autocomplete="current-password" />
+    </div>
+
+    <button class="btn btn-primary btn-full btn-lg" id="login-btn" onclick="doLogin()">
+      Sign In
+    </button>
+
+    <div class="form-footer">
+      Don't have an account? <a href="/register">Create one</a>
+    </div>
+  </div>
+</div>
+
+<script src="/static/js/app.js"></script>
+<script>
+  // Redirect if already logged in
+  document.addEventListener('DOMContentLoaded', async () => {
+    const u = await loadUser();
+    if (u) window.location.href = '/';
+  });
+
+  document.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+
+  async function doLogin() {
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+    const errEl = document.getElementById('error-msg');
+    const btn = document.getElementById('login-btn');
+
+    errEl.classList.remove('show');
+
+    if (!email || !password) {
+      errEl.textContent = 'Please fill in all fields.';
+      errEl.classList.add('show');
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Signing in…';
+
+    try {
+      const data = await api('/api/auth/login', { method: 'POST', body: { email, password } });
+      currentUser = data.user;
+      showToast('Welcome back, ' + data.user.name.split(' ')[0] + '!', 'success');
+      setTimeout(() => { window.location.href = '/'; }, 800);
+    } catch (e) {
+      errEl.textContent = e.detail || 'Invalid credentials.';
+      errEl.classList.add('show');
+      btn.disabled = false;
+      btn.textContent = 'Sign In';
+    }
+  }
+</script>
+</body>
+</html>

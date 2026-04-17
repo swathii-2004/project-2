@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin — StyleCart</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+
+<nav class="navbar">
+  <a href="/" class="nav-brand">StyleCart</a>
+  <ul class="nav-links">
+    <li><a href="/">Shop</a></li>
+    <li><a href="/orders">Orders</a></li>
+  </ul>
+  <div style="display:flex;align-items:center;gap:0.75rem;">
+    <div id="nav-auth" style="display:none;gap:0.5rem;" class="nav-links">
+      <a href="/login">Login</a>
+    </div>
+    <div id="nav-user" style="display:none;align-items:center;gap:0.75rem;" class="nav-user"></div>
+  </div>
+</nav>
+
+<!-- 403 gate -->
+<div id="gate-403" class="page" style="display:none;">
+  <div class="gate">
+    <div class="gate-code">403</div>
+    <h2>Access Denied</h2>
+    <p>You don't have permission to view this page. Admin access required.</p>
+    <a href="/" class="btn btn-outline btn-lg">Back to Shop</a>
+  </div>
+</div>
+
+<!-- Not logged in gate -->
+<div id="gate-401" class="page" style="display:none;">
+  <div class="gate">
+    <div class="gate-code">🔒</div>
+    <h2>Admin Login Required</h2>
+    <p>Please sign in with an admin account to continue.</p>
+    <a href="/login" class="btn btn-primary btn-lg">Sign In</a>
+  </div>
+</div>
+
+<!-- Admin dashboard -->
+<div id="admin-page" class="page" style="display:none;">
+  <div style="margin-bottom:2rem; display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:1rem;">
+    <div>
+      <h1 class="page-title">Admin Dashboard</h1>
+      <p class="page-subtitle">Manage your StyleCart store</p>
+    </div>
+    <span style="background:var(--accent-dim);border:1px solid rgba(201,169,110,0.25);color:var(--accent);font-size:0.75rem;font-weight:600;padding:0.35rem 0.8rem;border-radius:4px;text-transform:uppercase;letter-spacing:0.07em;">Admin</span>
+  </div>
+
+  <!-- Stats -->
+  <div class="stat-cards" id="stat-cards">
+    <div class="stat-card"><div class="stat-value" id="stat-products">—</div><div class="stat-label">Products</div></div>
+    <div class="stat-card"><div class="stat-value" id="stat-users">—</div><div class="stat-label">Users</div></div>
+    <div class="stat-card"><div class="stat-value" id="stat-orders">—</div><div class="stat-label">Orders</div></div>
+    <div class="stat-card"><div class="stat-value" id="stat-revenue">—</div><div class="stat-label">Revenue</div></div>
+  </div>
+
+  <div class="admin-grid">
+
+    <!-- Add Product Form -->
+    <div>
+      <h2 style="font-family:'Playfair Display',serif;font-size:1.2rem;margin-bottom:1.25rem;">Add New Product</h2>
+      <div class="form-card" style="padding:1.75rem;">
+        <div class="alert alert-error" id="add-error"></div>
+        <div class="alert alert-success" id="add-success"></div>
+
+        <div class="form-group">
+          <label>Product Name</label>
+          <input type="text" id="p-name" placeholder="e.g. Slim Fit Chinos" />
+        </div>
+        <div class="form-group">
+          <label>Price (USD)</label>
+          <input type="number" id="p-price" placeholder="49.99" step="0.01" min="0" />
+        </div>
+        <div class="form-group">
+          <label>Category</label>
+          <select id="p-category">
+            <option value="">Select category…</option>
+            <option>Tops</option>
+            <option>Bottoms</option>
+            <option>Shoes</option>
+            <option>Accessories</option>
+            <option>Outerwear</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Image URL</label>
+          <input type="url" id="p-image" placeholder="https://images.unsplash.com/…" />
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <textarea id="p-desc" placeholder="Short product description…"></textarea>
+        </div>
+        <div class="form-group" style="display:flex;align-items:center;gap:0.75rem;">
+          <input type="checkbox" id="p-stock" checked style="width:auto;accent-color:var(--accent);" />
+          <label for="p-stock" style="text-transform:none;letter-spacing:0;font-size:0.875rem;color:var(--text-sub);margin:0;cursor:pointer;">In Stock</label>
+        </div>
+        <button class="btn btn-primary btn-full" id="add-btn" onclick="addProduct()">Add Product</button>
+      </div>
+    </div>
+
+    <!-- Products Table -->
+    <div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem;">
+        <h2 style="font-family:'Playfair Display',serif;font-size:1.2rem;">All Products</h2>
+        <button class="btn btn-outline btn-sm" onclick="loadProducts()">↻ Refresh</button>
+      </div>
+
+      <div id="products-loading" style="text-align:center;padding:2rem;"><div class="spinner"></div></div>
+
+      <div class="admin-table-wrap" id="products-table-wrap" style="display:none;">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Category</th>
+              <th>Price</th>
+              <th>Stock</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="products-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/js/app.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', async () => {
+    const user = await loadUser();
+    if (!user) {
+      document.getElementById('gate-401').style.display = 'block';
+      return;
+    }
+    if (user.role !== 'admin') {
+      document.getElementById('gate-403').style.display = 'block';
+      return;
+    }
+    document.getElementById('admin-page').style.display = 'block';
+    loadStats();
+    loadProducts();
+  });
+
+  async function loadStats() {
+    try {
+      const s = await api('/api/admin/stats');
+      document.getElementById('stat-products').textContent = s.total_products;
+      document.getElementById('stat-users').textContent = s.total_users;
+      document.getElementById('stat-orders').textContent = s.total_orders;
+      document.getElementById('stat-revenue').textContent = '$' + s.total_revenue.toFixed(0);
+    } catch {}
+  }
+
+  async function loadProducts() {
+    document.getElementById('products-loading').style.display = 'block';
+    document.getElementById('products-table-wrap').style.display = 'none';
+    try {
+      const products = await api('/api/admin/products');
+      const tbody = document.getElementById('products-tbody');
+      tbody.innerHTML = products.map(p => `
+        <tr id="row-${p.id}">
+          <td>${p.name}</td>
+          <td>${p.category}</td>
+          <td>${fmt(p.price)}</td>
+          <td>
+            <span class="stock-badge ${p.in_stock ? 'in' : 'out'}" id="stock-badge-${p.id}">
+              ${p.in_stock ? 'In Stock' : 'Out'}
+            </span>
+          </td>
+          <td>
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+              <button class="btn btn-outline btn-sm" onclick="toggleStock('${p.id}', this)">
+                Toggle Stock
+              </button>
+              <button class="btn btn-danger btn-sm" onclick="deleteProduct('${p.id}', this)">
+                Delete
+              </button>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+      document.getElementById('products-loading').style.display = 'none';
+      document.getElementById('products-table-wrap').style.display = 'block';
+    } catch (e) {
+      showToast('Failed to load products', 'error');
+      document.getElementById('products-loading').style.display = 'none';
+    }
+  }
+
+  async function addProduct() {
+    const name = document.getElementById('p-name').value.trim();
+    const price = parseFloat(document.getElementById('p-price').value);
+    const category = document.getElementById('p-category').value;
+    const image_url = document.getElementById('p-image').value.trim();
+    const description = document.getElementById('p-desc').value.trim();
+    const in_stock = document.getElementById('p-stock').checked;
+
+    const errEl = document.getElementById('add-error');
+    const sucEl = document.getElementById('add-success');
+    errEl.classList.remove('show');
+    sucEl.classList.remove('show');
+
+    if (!name || !price || !category || !image_url) {
+      errEl.textContent = 'Please fill in name, price, category, and image URL.';
+      errEl.classList.add('show');
+      return;
+    }
+    if (isNaN(price) || price <= 0) {
+      errEl.textContent = 'Please enter a valid price.';
+      errEl.classList.add('show');
+      return;
+    }
+
+    const btn = document.getElementById('add-btn');
+    btn.disabled = true;
+    btn.textContent = 'Adding…';
+
+    try {
+      await api('/api/admin/products', {
+        method: 'POST',
+        body: { name, price, category, image_url, description, in_stock }
+      });
+      sucEl.textContent = `"${name}" added successfully!`;
+      sucEl.classList.add('show');
+      // Clear form
+      ['p-name','p-price','p-image','p-desc'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('p-category').value = '';
+      document.getElementById('p-stock').checked = true;
+      loadProducts();
+      loadStats();
+    } catch (e) {
+      errEl.textContent = e.detail || 'Failed to add product.';
+      errEl.classList.add('show');
+    }
+    btn.disabled = false;
+    btn.textContent = 'Add Product';
+  }
+
+  async function deleteProduct(id, btn) {
+    if (!confirm('Delete this product? This cannot be undone.')) return;
+    btn.disabled = true;
+    btn.textContent = '…';
+    try {
+      await api(`/api/admin/products/${id}`, { method: 'DELETE' });
+      const row = document.getElementById(`row-${id}`);
+      if (row) { row.style.opacity = '0'; setTimeout(() => row.remove(), 300); }
+      showToast('Product deleted', 'info');
+      loadStats();
+    } catch (e) {
+      showToast(e.detail || 'Delete failed', 'error');
+      btn.disabled = false;
+      btn.textContent = 'Delete';
+    }
+  }
+
+  async function toggleStock(id, btn) {
+    btn.disabled = true;
+    try {
+      const res = await api(`/api/admin/products/${id}/stock`, { method: 'PATCH' });
+      const badge = document.getElementById(`stock-badge-${id}`);
+      if (badge) {
+        badge.className = `stock-badge ${res.in_stock ? 'in' : 'out'}`;
+        badge.textContent = res.in_stock ? 'In Stock' : 'Out';
+      }
+      showToast('Stock status updated', 'success');
+    } catch (e) {
+      showToast(e.detail || 'Update failed', 'error');
+    }
+    btn.disabled = false;
+  }
+</script>
+</body>
+</html>

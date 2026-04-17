@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>StyleCart — Premium Fashion</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛍</text></svg>" />
+</head>
+<body>
+
+<nav class="navbar">
+  <a href="/" class="nav-brand">StyleCart</a>
+  <ul class="nav-links">
+    <li><a href="/">Shop</a></li>
+    <li><a href="/cart">Cart</a></li>
+    <li><a href="/orders">Orders</a></li>
+  </ul>
+  <div style="display:flex;align-items:center;gap:0.75rem;">
+    <a href="/cart" class="nav-cart-icon" id="nav-cart-wrap" style="display:none;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/>
+        <line x1="3" y1="6" x2="21" y2="6"/>
+        <path d="M16 10a4 4 0 01-8 0"/>
+      </svg>
+      Cart
+      <span class="cart-badge" id="cart-badge" style="display:none;">0</span>
+    </a>
+    <div id="nav-auth" style="display:none;gap:0.5rem;" class="nav-links">
+      <a href="/login">Login</a>
+      <a href="/register" class="btn btn-primary btn-sm">Register</a>
+    </div>
+    <div id="nav-user" style="display:none;align-items:center;gap:0.75rem;" class="nav-user"></div>
+  </div>
+</nav>
+
+<main class="page">
+
+  <div style="margin-bottom:2rem;">
+    <h1 class="page-title">New Arrivals</h1>
+    <p class="page-subtitle">Curated pieces for the modern wardrobe</p>
+  </div>
+
+  <div class="filters-bar">
+    <div class="search-input-wrap">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+      <input class="search-input" type="text" id="search" placeholder="Search products…" autocomplete="off" />
+    </div>
+    <div class="category-tabs" id="category-tabs"></div>
+  </div>
+
+  <div id="products-container">
+    <div class="loading-grid" id="skeleton-grid"></div>
+  </div>
+
+</main>
+
+<script src="/static/js/app.js"></script>
+<script>
+  // Skeleton loader
+  const skGrid = document.getElementById('skeleton-grid');
+  for (let i = 0; i < 8; i++) {
+    skGrid.innerHTML += `<div class="skeleton"><div class="skeleton-img"></div><div class="skeleton-text"></div><div class="skeleton-text short"></div></div>`;
+  }
+
+  let allProducts = [];
+  let selectedCategory = 'All';
+  let searchQuery = '';
+
+  async function fetchCategories() {
+    const cats = await api('/api/products/categories');
+    const tabs = document.getElementById('category-tabs');
+    tabs.innerHTML = cats.map(c => `
+      <button class="cat-tab ${c === 'All' ? 'active' : ''}" onclick="filterCategory('${c}')">${c}</button>
+    `).join('');
+  }
+
+  async function fetchProducts() {
+    const params = new URLSearchParams();
+    if (searchQuery) params.set('search', searchQuery);
+    if (selectedCategory && selectedCategory !== 'All') params.set('category', selectedCategory);
+    allProducts = await api('/api/products/?' + params.toString());
+    renderProducts();
+  }
+
+  function renderProducts() {
+    const container = document.getElementById('products-container');
+    if (!allProducts.length) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">🔍</div>
+          <h3>No products found</h3>
+          <p>Try a different search or category</p>
+        </div>`;
+      return;
+    }
+    container.innerHTML = `<div class="products-grid">${allProducts.map(productCard).join('')}</div>`;
+  }
+
+  function productCard(p) {
+    const outOfStock = !p.in_stock;
+    return `
+    <div class="product-card">
+      <div class="product-img-wrap">
+        <img src="${p.image_url}" alt="${p.name}" loading="lazy" onerror="this.src='https://placehold.co/400x460/161616/7a7570?text=No+Image'" />
+        ${outOfStock ? '<span class="out-of-stock-badge">Out of Stock</span>' : ''}
+      </div>
+      <div class="product-info">
+        <span class="product-category">${p.category}</span>
+        <div class="product-name">${p.name}</div>
+        <div class="product-price">${fmt(p.price)}</div>
+        <div class="product-actions">
+          <button class="btn btn-primary btn-sm btn-full"
+            onclick="addToCart('${p.id}', this)"
+            ${outOfStock ? 'disabled' : ''}>
+            ${outOfStock ? 'Out of Stock' : 'Add to Cart'}
+          </button>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  async function addToCart(productId, btn) {
+    if (!currentUser) { window.location.href = '/login'; return; }
+    const orig = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Adding…';
+    try {
+      await api('/api/cart/add', { method: 'POST', body: { product_id: productId, quantity: 1 } });
+      showToast('Added to cart!', 'success');
+      updateCartBadge();
+      btn.textContent = '✓ Added';
+      setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 1800);
+    } catch (e) {
+      showToast(e.detail, 'error');
+      btn.textContent = orig;
+      btn.disabled = false;
+    }
+  }
+
+  function filterCategory(cat) {
+    selectedCategory = cat;
+    document.querySelectorAll('.cat-tab').forEach(t => t.classList.toggle('active', t.textContent === cat));
+    fetchProducts();
+  }
+
+  let searchTimer;
+  document.getElementById('search').addEventListener('input', e => {
+    clearTimeout(searchTimer);
+    searchQuery = e.target.value.trim();
+    searchTimer = setTimeout(fetchProducts, 320);
+  });
+
+  (async () => {
+    await fetchCategories();
+    await fetchProducts();
+  })();
+</script>
+</body>
+</html>
